@@ -1,0 +1,26 @@
+meta {
+  name: 02 Consultar Pago por ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/{{paymentId}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status 200 OK", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("ID coincide", function() {
+    expect(res.body.id).to.equal(bru.getVar("paymentId"));
+  });
+  test("Status es PENDING", function() {
+    expect(res.body.status).to.equal("PENDING");
+  });
+  test("Tiene createdAt", function() {
+    expect(res.body.createdAt).to.be.a("string");
+  });
+}

@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+
+# Entorno (NUNCA subir credenciales)
+.env
+
+# Prisma generated
+prisma/migrations/
+
+# Coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+.env
+coverage/
+prisma/migrations/
+# Mock
+mock-payment/node_modules/

@@ -1,0 +1,29 @@
+meta {
+  name: 10 Estadísticas de Pagos
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/stats
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status 200 OK", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("Tiene campo total", function() {
+    expect(res.body.total).to.be.a("number");
+  });
+  test("Tiene breakdown pending/approved/rejected", function() {
+    expect(res.body.pending).to.have.property("count");
+    expect(res.body.approved).to.have.property("count");
+    expect(res.body.rejected).to.have.property("count");
+  });
+  test("Suma de estados = total", function() {
+    const sum = res.body.pending.count + res.body.approved.count + res.body.rejected.count;
+    expect(sum).to.equal(res.body.total);
+  });
+}

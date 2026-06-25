@@ -1,0 +1,26 @@
+meta {
+  name: 07 Listar Todos los Pagos
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status 200 OK", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("Respuesta es array", function() {
+    expect(res.body).to.be.an("array");
+  });
+  test("Cada pago tiene id y status", function() {
+    res.body.forEach(function(p) {
+      expect(p.id).to.be.a("string");
+      expect(["PENDING","APPROVED","REJECTED"]).to.include(p.status);
+    });
+  });
+}

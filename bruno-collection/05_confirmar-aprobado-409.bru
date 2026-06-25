@@ -1,0 +1,27 @@
+meta {
+  name: 05 Confirmar Pago ya APPROVED → 409
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/{{paymentId}}/confirm
+  body: none
+  auth: none
+}
+
+headers {
+  Idempotency-Key: confirm-nuevo-key-002
+}
+
+tests {
+  test("Status 409 Conflict", function() {
+    expect(res.status).to.equal(409);
+  });
+  test("Código INVALID_STATE_TRANSITION", function() {
+    expect(res.body.code).to.equal("INVALID_STATE_TRANSITION");
+  });
+  test("current_status es APPROVED", function() {
+    expect(res.body.current_status).to.equal("APPROVED");
+  });
+}
