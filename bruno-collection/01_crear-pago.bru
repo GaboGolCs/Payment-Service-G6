@@ -12,15 +12,19 @@ post {
 
 headers {
   Content-Type: application/json
-  Idempotency-Key: order-abc-001
+  Idempotency-Key: {{runId}}
 }
 
 body:json {
   {
     "amount": 150.00,
     "currency": "USD",
-    "orderId": "order-abc-123"
+    "orderId": "order-{{runId}}"
   }
+}
+
+script:pre-request {
+  bru.setVar("runId", "run-" + Date.now());
 }
 
 script:post-response {
@@ -47,6 +51,6 @@ tests {
     expect(res.body.currency).to.equal("USD");
   });
   test("orderId correcto", function() {
-    expect(res.body.orderId).to.equal("order-abc-123");
+    expect(res.body.orderId).to.equal("order-" + bru.getVar("runId"));
   });
 }

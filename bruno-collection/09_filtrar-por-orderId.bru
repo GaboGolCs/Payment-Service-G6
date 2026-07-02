@@ -5,7 +5,7 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}?orderId=order-abc-123
+  url: {{baseUrl}}?orderId=order-{{runId}}
   body: none
   auth: none
 }
@@ -16,7 +16,7 @@ tests {
   });
   test("Todos los resultados tienen orderId correcto", function() {
     res.body.forEach(function(p) {
-      expect(p.orderId).to.equal("order-abc-123");
+      expect(p.orderId).to.equal("order-" + bru.getVar("runId"));
     });
   });
 }
