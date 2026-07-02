@@ -1,0 +1,65 @@
+name: CI
+
+# Corre en cada push y pull request a cualquier rama.
+# El deploy a producción lo maneja Render automáticamente (auto-deploy
+# conectado al repo de GitHub) al hacer push a la rama configurada en Render;
+# este workflow solo valida que el código, las migraciones y el build estén
+# sanos ANTES de que ese deploy ocurra.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    # Base de datos de prueba efímera, solo para validar que las migraciones
+    # de Prisma se puedan aplicar limpiamente. No es la base de Supabase.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: payment_service_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/payment_service_ci
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar Prisma Client
+        run: npx prisma generate
+
+      - name: Validar migraciones (contra Postgres efímero de CI)
+        run: npx prisma migrate deploy
+
+      - name: Compilar TypeScript
+        run: npm run build
+
+      - name: Ejecutar tests
+        run: npm test
+
+      - name: Validar build de la imagen Docker
+        run: docker build -t payment-service-g6:ci .
