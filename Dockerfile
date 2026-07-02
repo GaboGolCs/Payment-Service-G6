@@ -2,6 +2,9 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
+# Prisma necesita openssl para generar/ejecutar el motor en Alpine
+RUN apk add --no-cache openssl
+
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm ci
@@ -13,6 +16,9 @@ RUN npm run build
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Prisma necesita openssl para ejecutar el motor en Alpine
+RUN apk add --no-cache openssl
 
 COPY package*.json ./
 COPY prisma ./prisma
