@@ -1,0 +1,35 @@
+meta {
+  name: 06 Rechazar Pago (necesita un PENDING nuevo)
+  type: http
+  seq: 6
+}
+
+// Nota: primero crea un nuevo pago con 01, luego usa ese paymentId aquí.
+// O ejecuta esta request después de que el paymentId apunte a un pago PENDING.
+
+post {
+  url: {{baseUrl}}/{{paymentId}}/reject
+  body: none
+  auth: none
+}
+
+headers {
+  Idempotency-Key: reject-abc-001
+}
+
+tests {
+  test("Status 200 OK o 409 si ya fue procesado", function() {
+    expect([200, 409]).to.include(res.status);
+  });
+  test("Si 200: Status es REJECTED", function() {
+    if (res.status === 200) {
+      expect(res.body.status).to.equal("REJECTED");
+      expect(res.body.rejectedAt).to.not.be.null;
+    }
+  });
+  test("Si 409: código INVALID_STATE_TRANSITION", function() {
+    if (res.status === 409) {
+      expect(res.body.code).to.equal("INVALID_STATE_TRANSITION");
+    }
+  });
+}

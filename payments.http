@@ -1,0 +1,52 @@
+@baseUrl = http://localhost:3000/api/payments
+@paymentId = {{createPayment.response.body.id}}
+
+### 1. Crear pago (PENDING)
+# @name createPayment
+POST {{baseUrl}}
+Content-Type: application/json
+Idempotency-Key: order-abc-001
+
+{
+  "amount": 150.00,
+  "currency": "USD",
+  "orderId": "order-abc-123"
+}
+
+### 2. Consultar estado del pago
+GET {{baseUrl}}/{{paymentId}}
+
+### 3. Confirmar pago (PENDING → APPROVED)
+# @name confirmPayment
+POST {{baseUrl}}/{{paymentId}}/confirm
+Idempotency-Key: confirm-abc-001
+
+### 4. Rechazar pago (PENDING → REJECTED)
+POST {{baseUrl}}/{{paymentId}}/reject
+Idempotency-Key: reject-abc-001
+
+### 5. Test idempotencia — enviar misma confirmación dos veces
+# Segunda llamada debe retornar resultado cacheado (HTTP 200, no re-procesa)
+POST {{baseUrl}}/{{paymentId}}/confirm
+Idempotency-Key: confirm-abc-001
+
+### 6. Listar todos los pagos
+GET {{baseUrl}}
+
+### 7. Filtrar pagos por estado
+GET {{baseUrl}}?status=APPROVED
+
+### 8. Filtrar por orderId
+GET {{baseUrl}}?orderId=order-abc-123
+
+### 9. Estadísticas (consumido por Grupo 10)
+GET {{baseUrl}}/stats
+
+### 10. Simular notificación de webhook de Mercado Pago
+# En un caso real, Mercado Pago llama a esta URL con ?type=payment&data.id=<mpPaymentId>
+# y el servicio hace GET /v1/payments/<mpPaymentId> contra la API real de MP.
+# Para probar localmente necesitas un pago real creado en modo sandbox (ver README).
+POST {{baseUrl}}/webhook?type=payment&data.id=123456789
+Content-Type: application/json
+
+{}

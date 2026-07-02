@@ -1,0 +1,22 @@
+meta {
+  name: 09 Filtrar Pagos por orderId
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}?orderId=order-abc-123
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status 200 OK", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("Todos los resultados tienen orderId correcto", function() {
+    res.body.forEach(function(p) {
+      expect(p.orderId).to.equal("order-abc-123");
+    });
+  });
+}

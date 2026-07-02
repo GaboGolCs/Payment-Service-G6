@@ -1,0 +1,41 @@
+{
+  "name": "payment-service",
+  "version": "1.0.0",
+  "description": "Simulated payment service with idempotency and race condition handling",
+  "main": "dist/app.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/app.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/app.js",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:generate": "prisma generate",
+    "postinstall": "prisma generate",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "demo:grupo5": "node demo/simulate-grupo5-order.js",
+    "demo:grupo9": "node demo/consumer-grupo9.js",
+    "demo:grupo10": "node demo/consumer-grupo10.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mercadopago": "^3.2.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.9",
+    "@types/uuid": "^10.0.0",
+    "jest": "^29.7.0",
+    "prisma": "^5.14.0",
+    "ts-jest": "^29.2.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.2"
+  }
+}

@@ -1,0 +1,22 @@
+meta {
+  name: 08 Filtrar Pagos por Status (APPROVED)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}?status=APPROVED
+  body: none
+  auth: none
+}
+
+tests {
+  test("Status 200 OK", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("Todos los resultados son APPROVED", function() {
+    res.body.forEach(function(p) {
+      expect(p.status).to.equal("APPROVED");
+    });
+  });
+}

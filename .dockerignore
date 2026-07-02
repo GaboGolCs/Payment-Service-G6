@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+.env
+.git
+.github
+bruno-collection
+mock-payment
+tests
+*.log

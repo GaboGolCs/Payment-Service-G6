@@ -1,0 +1,52 @@
+meta {
+  name: 01 Crear Pago (PENDING)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: order-abc-001
+}
+
+body:json {
+  {
+    "amount": 150.00,
+    "currency": "USD",
+    "orderId": "order-abc-123"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("paymentId", res.body.id);
+    console.log("paymentId guardado:", res.body.id);
+  }
+}
+
+tests {
+  test("Status 201 Created", function() {
+    expect(res.status).to.equal(201);
+  });
+  test("Tiene id", function() {
+    expect(res.body.id).to.be.a("string");
+  });
+  test("Status es PENDING", function() {
+    expect(res.body.status).to.equal("PENDING");
+  });
+  test("Amount correcto", function() {
+    expect(res.body.amount).to.equal(150);
+  });
+  test("Currency es USD", function() {
+    expect(res.body.currency).to.equal("USD");
+  });
+  test("orderId correcto", function() {
+    expect(res.body.orderId).to.equal("order-abc-123");
+  });
+}

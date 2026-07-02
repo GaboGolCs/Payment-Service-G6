@@ -1,0 +1,30 @@
+meta {
+  name: 03 Confirmar Pago (PENDING → APPROVED)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/{{paymentId}}/confirm
+  body: none
+  auth: none
+}
+
+headers {
+  Idempotency-Key: confirm-abc-001
+}
+
+tests {
+  test("Status 200 OK", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("Status es APPROVED", function() {
+    expect(res.body.status).to.equal("APPROVED");
+  });
+  test("confirmedAt presente", function() {
+    expect(res.body.confirmedAt).to.not.be.null;
+  });
+  test("version incrementó", function() {
+    expect(res.body.version).to.be.greaterThan(0);
+  });
+}

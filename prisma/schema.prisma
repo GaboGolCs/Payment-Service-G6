@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  amount          Float
+  currency        String        @default("USD")
+  status          PaymentStatus @default(PENDING)
+  idempotencyKey  String?       @unique
+  orderId         String?
+  description     String?
+  payerEmail      String?
+  metadata        Json?
+  version         Int           @default(0)
+
+  // Integración Mercado Pago (Checkout Pro)
+  mpPreferenceId  String?       @unique
+  mpPaymentId     String?       @unique
+  initPoint       String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  confirmedAt     DateTime?
+  rejectedAt      DateTime?
+
+  @@index([orderId])
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model IdempotencyRecord {
+  key       String   @id
+  paymentId String
+  result    Json
+  createdAt DateTime @default(now())
+}

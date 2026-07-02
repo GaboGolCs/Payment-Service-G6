@@ -1,0 +1,35 @@
+services:
+  # Servicio de pagos completo, construido desde el Dockerfile del repo.
+  # Uso: docker compose --profile full up -d
+  # Nota: en producción DATABASE_URL apunta a Supabase (ver .env.example),
+  # este postgres local es solo para desarrollo sin depender de internet.
+  app:
+    build: .
+    profiles: ["full"]
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://user:password@postgres:5432/payments_db
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-}
+      WEBHOOK_URLS_PAYMENT_PENDING: ${WEBHOOK_URLS_PAYMENT_PENDING:-}
+      WEBHOOK_URLS_PAYMENT_APPROVED: ${WEBHOOK_URLS_PAYMENT_APPROVED:-}
+      WEBHOOK_URLS_PAYMENT_REJECTED: ${WEBHOOK_URLS_PAYMENT_REJECTED:-}
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: payments_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

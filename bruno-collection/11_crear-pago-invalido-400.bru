@@ -1,0 +1,32 @@
+meta {
+  name: 11 Crear Pago con Amount Inválido → 400
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Idempotency-Key: invalid-001
+}
+
+body:json {
+  {
+    "amount": -50,
+    "currency": "USD"
+  }
+}
+
+tests {
+  test("Status 400 Bad Request", function() {
+    expect(res.status).to.equal(400);
+  });
+  test("Tiene campo error", function() {
+    expect(res.body.error).to.be.a("string");
+  });
+}
