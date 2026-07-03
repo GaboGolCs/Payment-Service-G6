@@ -14,16 +14,14 @@ tests {
   test("Status 200 OK", function() {
     expect(res.status).to.equal(200);
   });
-  test("Tiene campo total", function() {
-    expect(res.body.total).to.be.a("number");
+  test("Retorna un array", function() {
+    expect(res.body).to.be.an("array");
   });
-  test("Tiene breakdown pending/approved/rejected", function() {
-    expect(res.body.pending).to.have.property("count");
-    expect(res.body.approved).to.have.property("count");
-    expect(res.body.rejected).to.have.property("count");
-  });
-  test("Suma de estados = total", function() {
-    const sum = res.body.pending.count + res.body.approved.count + res.body.rejected.count;
-    expect(sum).to.equal(res.body.total);
+  test("Cada grupo tiene status, _count y _sum", function() {
+    res.body.forEach(function(group) {
+      expect(group.status).to.be.a("string");
+      expect(group._count).to.have.property("id");
+      expect(group._sum).to.have.property("amount");
+    });
   });
 }

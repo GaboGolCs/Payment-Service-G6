@@ -63,3 +63,34 @@ jobs:
 
       - name: Validar build de la imagen Docker
         run: docker build -t payment-service-g6:ci .
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # historial completo, necesario para escanear commits previos
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Detecta vulnerabilidades conocidas en dependencias (CVEs).
+      # No frena el pipeline (--audit-level=high solo informa); se puede
+      # endurecer más adelante quitando "|| true" para que sí bloquee.
+      - name: Auditar dependencias (npm audit)
+        run: npm audit --audit-level=high || true
+
+      # Escanea todo el historial de commits en busca de secretos filtrados
+      # (API keys, tokens, contraseñas) commiteados por error.
+      - name: Escanear secretos filtrados (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
