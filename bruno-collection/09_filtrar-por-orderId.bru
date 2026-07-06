@@ -5,9 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}?orderId=order-{{runId}}
+  url: {{baseUrl}}?orderId=0000000000000000000000
   body: none
   auth: none
+}
+
+params:query {
+  orderId: 0000000000000000000000
 }
 
 tests {

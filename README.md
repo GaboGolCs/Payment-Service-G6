@@ -102,6 +102,8 @@ Cualquier intento de transición desde un estado final devuelve `409 INVALID_STA
 
 Cada grupo consumidor expone su propio endpoint HTTP (p. ej. `POST /webhooks/payments`) y nos pasa su URL para agregarla a la variable correspondiente. El body que reciben es idéntico al `PaymentEvent` que antes viajaba por RabbitMQ — solo cambió el transporte (HTTP en vez de AMQP), así que el contrato de datos no cambia para los otros grupos.
 
+**Nota sobre Redis**: el diagrama de arquitectura general del proyecto contempla Redis como cache. Este servicio no lo usa: la idempotencia (que normalmente se resolvería con Redis + TTL) se implementó directamente en Postgres (`IdempotencyRecord`, TTL 24h vía columna `expiresAt`), evitando una pieza de infraestructura adicional sin necesidad funcional para el volumen de este proyecto. Es una simplificación consciente, no una omisión.
+
 ---
 
 ## Conexiones con otros grupos (según diagrama de arquitectura)
