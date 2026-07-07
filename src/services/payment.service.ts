@@ -1,25 +1,28 @@
 import { paymentRepository } from '../repositories/payment.repository';
-import { eventPublisher } from '../events/event.publisher';
 import { CreatePaymentDto, PaymentStateError, ConflictError } from '../models/payment.model';
 import { env } from '../config/env';
 import { mercadoPagoService, mapMercadoPagoStatus } from './mercadopago.service';
+
+// USA LA IMPORTACIÓN NOMBRADA (CON LLAVES):
+// BUSCA ESTA LÍNEA Y DÉJALA EXACTAMENTE ASÍ:
+import { eventPublisher } from '../events/event.publisher';
 
 export const paymentService = {
   /**
    * POST /payments
    * Crea un pago en estado PENDING, genera la preferencia de Checkout Pro
-   * en Mercado Pago (init_point que Grupo 5/Grupo 1 usan para redirigir al
-   * usuario a la pasarela) y publica el evento PaymentPending.
+   * en Mercado Pago e incluye la información del userId/metadata en el evento.
    */
-  createPayment: async (dto: CreatePaymentDto) => {
+  createPayment: async (dto: CreatePaymentDto & { metadata?: Record<string, unknown> }) => {
     let payment = await paymentRepository.create(dto);
 
-    // Eventual consistency: Grupo 9 (notificaciones) recibirá este evento
+    // Eventual consistency: Grupo 5 y Grupo 9 recibirán este evento incluyendo la metadata/userId
     await eventPublisher.publish('PaymentPending', {
       paymentId: payment.id,
       amount: payment.amount,
       currency: payment.currency,
       orderId: payment.orderId,
+      metadata: payment.metadata || dto.metadata || {}
     });
 
     if (env.MP_ACCESS_TOKEN) {
@@ -46,15 +49,7 @@ export const paymentService = {
 
   /**
    * POST /payments/webhook
-   *
-   * Mercado Pago solo envía `{ type, data: { id } }`; NUNCA se confía en un
-   * status embebido en el body. Siempre se re-consulta el pago real contra
-   * la API de Mercado Pago usando ese id, y se resuelve nuestro Payment por
-   * `external_reference` (que es nuestro Payment.id).
-   *
-   * Idempotente: si el pago ya está en estado final, se responde 200 sin
-   * reprocesar ni volver a publicar el evento (Mercado Pago reintenta
-   * notificaciones agresivamente).
+   * Escucha asíncronamente las actualizaciones automáticas provenientes de Mercado Pago.
    */
   handleMercadoPagoWebhook: async (mpPaymentId: string) => {
     const mpPayment = await mercadoPagoService.getPayment(mpPaymentId);
@@ -79,7 +74,6 @@ export const paymentService = {
 
     const target = mapMercadoPagoStatus(mpStatus || 'pending');
     if (target === 'PENDING') {
-      // in_process / authorized / etc: aún no hay nada que aplicar
       return { ignored: true, mpStatus };
     }
 
@@ -91,15 +85,13 @@ export const paymentService = {
     );
 
     if (result.count === 0) {
-      // Carrera con otra actualización concurrente (p.ej. doble notificación
-      // casi simultánea): no es un error, simplemente no hay nada que hacer.
       return { ignored: true, raceCondition: true };
     }
 
     const updated = await paymentRepository.findById(payment.id);
     const eventName = target === 'APPROVED' ? 'PaymentApproved' : 'PaymentRejected';
 
-    // Grupos 5/9/10 según el evento (ver tabla de routing keys en event.publisher)
+    // Se publica el resultado adjuntando la metadata con el userId original
     await eventPublisher.publish(eventName, {
       paymentId: updated!.id,
       amount: updated!.amount,
@@ -108,6 +100,7 @@ export const paymentService = {
       mpPaymentId,
       confirmedAt: updated!.confirmedAt?.toISOString(),
       rejectedAt: updated!.rejectedAt?.toISOString(),
+      metadata: updated!.metadata || {}
     });
 
     return { ignored: false, payment: updated };
@@ -128,18 +121,12 @@ export const paymentService = {
 
   /**
    * POST /payments/:id/confirm
-   *
-   * Patrones aplicados:
-   * 1. Estado transaccional: solo PENDING puede confirmarse
-   * 2. Optimistic locking: UPDATE WHERE version=N previene doble procesamiento
-   * 3. Idempotencia: manejada en el middleware (Redis)
-   * 4. Eventual consistency: evento publicado tras commit exitoso
+   * Fuerza/Simula manualmente la aprobación de un pago usando Optimistic Locking
    */
   confirmPayment: async (id: string) => {
     const payment = await paymentRepository.findById(id);
     if (!payment) throw new Error('NOT_FOUND');
 
-    // Guard de estado transaccional
     if (payment.status !== 'PENDING') {
       throw new PaymentStateError(
         'ALREADY_PROCESSED',
@@ -148,7 +135,6 @@ export const paymentService = {
       );
     }
 
-    // Optimistic locking — si count === 0 hubo race condition
     const result = await paymentRepository.confirmWithOptimisticLock(id, payment.version);
 
     if (result.count === 0) {
@@ -159,13 +145,14 @@ export const paymentService = {
 
     const updated = await paymentRepository.findById(id);
 
-    // Grupos 5 (pedidos) y 10 (reportería) recibirán este evento
+    // Fila 4 del Excel: El Grupo 5 (Pedidos) escucha este evento para pasar la orden a 'PAID'
     await eventPublisher.publish('PaymentApproved', {
       paymentId: updated!.id,
       amount: updated!.amount,
       currency: updated!.currency,
       orderId: updated!.orderId,
       confirmedAt: updated!.confirmedAt?.toISOString(),
+      metadata: updated!.metadata || {}
     });
 
     return updated;
@@ -173,7 +160,7 @@ export const paymentService = {
 
   /**
    * POST /payments/:id/reject
-   * Mismos patrones que confirmPayment pero transición → REJECTED
+   * Fuerza/Simula el rechazo de un pago.
    */
   rejectPayment: async (id: string) => {
     const payment = await paymentRepository.findById(id);
@@ -197,13 +184,14 @@ export const paymentService = {
 
     const updated = await paymentRepository.findById(id);
 
-    // Grupos 9 (notificaciones) y 10 (reportería) recibirán este evento
+    // Fila 4 del Excel de cancelaciones: Notifica al Grupo 5 para pasar a 'CANCELLED'
     await eventPublisher.publish('PaymentRejected', {
       paymentId: updated!.id,
       amount: updated!.amount,
       currency: updated!.currency,
       orderId: updated!.orderId,
       rejectedAt: updated!.rejectedAt?.toISOString(),
+      metadata: updated!.metadata || {}
     });
 
     return updated;

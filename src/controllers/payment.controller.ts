@@ -4,12 +4,21 @@ import { paymentService } from '../services/payment.service';
 import { PaymentStateError, ConflictError } from '../models/payment.model';
 import { mercadoPagoService } from '../services/mercadopago.service';
 
+// USA LA IMPORTACIÓN NOMBRADA (CON LLAVES):
+// BUSCA ESTA LÍNEA Y DÉJALA EXACTAMENTE ASÍ:
+import { eventPublisher } from '../events/event.publisher';
+
+// ... (Todo el resto de tu controlador que corregimos antes queda igual) Importación agregada para RabbitMQ
+
+// Esquema de validación adaptado al contrato del Grupo 5 (Pedidos)
 const CreatePaymentSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().length(3).optional(),
-  orderId: z.string().optional(),
+  orderId: z.string({ required_error: 'orderId is required from G5' }), 
   description: z.string().optional(),
   payerEmail: z.string().email().optional(),
+  userId: z.string().optional(), // Captura el ID de Auth externo (ej: "felipe-04")
+  orderNumber: z.string().optional()
 });
 
 export const createPayment = async (req: Request, res: Response) => {
@@ -21,7 +30,25 @@ export const createPayment = async (req: Request, res: Response) => {
   const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
 
   try {
-    const payment = await paymentService.createPayment({ ...parsed.data, idempotencyKey });
+    // Estructuramos el payload mapeando el userId dentro de un objeto de metadatos plano
+    const payment = await paymentService.createPayment({
+      amount: parsed.data.amount,
+      currency: parsed.data.currency,
+      orderId: parsed.data.orderId,
+      description: parsed.data.description || `Orden nro: ${parsed.data.orderNumber || 'S/N'}`,
+      payerEmail: parsed.data.payerEmail,
+      idempotencyKey,
+      metadata: parsed.data.userId ? { userId: parsed.data.userId } : undefined
+    });
+
+    // Fila 3 del Excel: Publicamos el evento 'PaymentPending' de inmediato a RabbitMQ
+    await eventPublisher.publish('PaymentPending', {
+      paymentId: payment.id,
+      orderId: payment.orderId,
+      amount: payment.amount,
+      status: payment.status
+    });
+
     return res.status(201).json(payment);
   } catch (err) {
     console.error('[createPayment]', err);
@@ -111,12 +138,7 @@ export const getPaymentStats = async (_req: Request, res: Response) => {
 
 /**
  * POST /api/payments/webhook
- *
- * Endpoint público que consume Mercado Pago para notificar cambios de
- * estado de un pago (Checkout Pro). Responde 200 lo antes posible: MP
- * reintenta agresivamente si no recibe 2xx.
- *
- * Referencia: https://www.mercadopago.com/developers -> Notificaciones webhook
+ * Consumido asíncronamente por Mercado Pago.
  */
 export const mercadoPagoWebhook = async (req: Request, res: Response) => {
   try {
@@ -124,7 +146,6 @@ export const mercadoPagoWebhook = async (req: Request, res: Response) => {
     const dataId = (req.query['data.id'] as string) || req.body?.data?.id;
 
     if (type !== 'payment' || !dataId) {
-      // Otros tipos de notificación (merchant_order, etc.) se reconocen pero se ignoran
       return res.status(200).json({ received: true, ignored: true });
     }
 
@@ -143,8 +164,6 @@ export const mercadoPagoWebhook = async (req: Request, res: Response) => {
     return res.status(200).json({ received: true, ...result });
   } catch (err) {
     console.error('[mercadoPagoWebhook]', err);
-    // Igual respondemos 200 para evitar reintentos infinitos por errores no
-    // recuperables (p.ej. pago ya no existe en MP); el log queda para debug.
     return res.status(200).json({ received: true, error: 'processing_error' });
   }
 };
