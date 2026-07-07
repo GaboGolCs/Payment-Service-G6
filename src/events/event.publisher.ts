@@ -1,90 +1,66 @@
-export type EventName = 'PaymentApproved' | 'PaymentRejected' | 'PaymentPending';
+import amqp from 'amqplib';
 
-export interface PaymentEvent {
-  eventId: string;
-  eventName: EventName;
-  paymentId: string;
-  timestamp: string;
-  payload: Record<string, unknown>;
-}
+export class EventPublisher {
+  // Usamos "any" aquí temporalmente para romper el conflicto de tipos de la librería en esta versión de TS
+  private channel: any = null;
+  private connection: any = null;
 
-/**
- * Publicador de eventos vía webhooks HTTP.
- *
- * Reemplaza la integración anterior con RabbitMQ: el servicio ahora depende
- * únicamente de Supabase (Postgres) + HTTP estándar, sin brokers adicionales
- * que levantar en producción.
- */
-export class EventPublisher { // <-- Agregamos "export" aquí para que los tipos e importaciones nombradas funcionen
-  /**
-   * Se mantiene por compatibilidad con el resto del código (app.ts la
-   * invoca al arrancar). Ya no hay conexión persistente que abrir.
-   */
-  async connect(): Promise<void> {
-    console.log('[EventPublisher] Listo (modo HTTP webhooks, sin broker externo)');
+  constructor() {
+    this.init();
   }
 
-  async publish(eventName: EventName, data: Record<string, unknown>): Promise<void> {
-    const event: PaymentEvent = {
-      eventId: crypto.randomUUID(),
-      eventName,
-      paymentId: data.paymentId as string,
-      timestamp: new Date().toISOString(),
-      payload: data,
-    };
-
-    const routingKey = `payment.${eventName.replace('Payment', '').toLowerCase()}`;
-    const envVar = `WEBHOOK_URLS_${routingKey.toUpperCase().replace(/\./g, '_')}`;
-    const urls = (process.env[envVar] || '')
-      .split(',')
-      .map((u) => u.trim())
-      .filter(Boolean);
-
-    if (urls.length === 0) {
-      console.log(
-        `[EventPublisher] ${eventName} (${event.eventId}) → sin suscriptores configurados en ${envVar}`
-      );
+  private async init() {
+    const url = process.env.RABBITMQ_URL;
+    if (!url) {
+      console.warn('[EventPublisher] RABBITMQ_URL no configurada.');
       return;
     }
-
-    const results = await Promise.allSettled(urls.map((url) => this.deliver(url, event)));
-
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') {
-        console.log(`[EventPublisher] ${eventName} (${event.eventId}) → OK ${urls[i]}`);
-      } else {
-        console.error(`[EventPublisher] ${eventName} (${event.eventId}) → FALLÓ ${urls[i]}:`, r.reason);
+    try {
+      this.connection = await amqp.connect(url);
+      this.channel = await this.connection.createChannel();
+      
+      if (this.channel) {
+        await this.channel.assertExchange('payments.events', 'topic', { durable: true });
+        console.log('[EventPublisher] Conectado a RabbitMQ, exchange "payments.events" listo.');
       }
-    });
+    } catch (error) {
+      console.error('[EventPublisher] Error conectando a RabbitMQ:', error);
+    }
   }
 
-  /** POST con timeout y 1 reintento; no lanza hasta agotar los intentos. */
-  private async deliver(url: string, event: PaymentEvent, attempt = 1): Promise<void> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
+  async publish(eventName: string, payload: Record<string, unknown>) {
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event),
-        signal: controller.signal,
-      });
+      const url = process.env.RABBITMQ_URL;
+      if (!url) return;
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+      if (!this.connection) {
+        this.connection = await amqp.connect(url);
       }
-    } catch (err) {
-      if (attempt < 2) {
-        return this.deliver(url, event, attempt + 1);
+      if (!this.channel) {
+        this.channel = await this.connection.createChannel();
       }
-      throw err;
-    } finally {
-      clearTimeout(timeout);
+
+      if (!this.channel) {
+        throw new Error('[EventPublisher] No se pudo obtener un canal activo de RabbitMQ.');
+      }
+
+      const exchange = 'payments.events';
+      const routingKey = eventName.replace(/([a-z0-9])([A-Z])/g, '$1.$2').toLowerCase();
+      
+      const messageBuffer = Buffer.from(JSON.stringify({
+        eventId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+        eventType: eventName,
+        producer: 'G6-PaymentService',
+        payload
+      }));
+
+      this.channel.publish(exchange, routingKey, messageBuffer, { persistent: true });
+      console.log(`[EventPublisher] ${eventName} → publicado en "${routingKey}"`);
+    } catch (error) {
+      console.error(`[EventPublisher] Error publicando evento ${eventName}:`, error);
     }
   }
 }
 
-// EXPORTACIONES DUALES (Esto remedia instantáneamente los fallos de importación de tus controladores y servicios)
 export const eventPublisher = new EventPublisher();
 export default eventPublisher;

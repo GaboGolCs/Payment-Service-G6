@@ -17,9 +17,14 @@ headers {
 
 body:json {
   {
-    "amount": 150.00,
+    "orderId": "orden-123",
+    "amount": 15500,
     "currency": "USD",
-    "orderId": "order-{{runId}}"
+    "description": "Compra de prueba Ecosistema",
+    "payerEmail": "test@example.com",
+    "metadata": {
+      "userId": "felipe-04"
+    }
   }
 }
 
