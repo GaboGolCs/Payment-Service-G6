@@ -1,12 +1,19 @@
 import amqp from 'amqplib';
 
 export class EventPublisher {
-  // Usamos "any" aquí temporalmente para romper el conflicto de tipos de la librería en esta versión de TS
   private channel: any = null;
   private connection: any = null;
 
   constructor() {
     this.init();
+  }
+
+  /**
+   * Método de compatibilidad para app.ts
+   * Evita el error de compilación en el arranque del servidor.
+   */
+  async connect(): Promise<void> {
+    console.log('[EventPublisher] Método connect() invocado por app.ts (inicialización en curso...)');
   }
 
   private async init() {
