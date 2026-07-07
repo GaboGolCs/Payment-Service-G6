@@ -1,3 +1,5 @@
+import * as amqp from 'amqplib';
+
 export type EventName = 'PaymentApproved' | 'PaymentRejected' | 'PaymentPending';
 
 export interface PaymentEvent {
@@ -8,34 +10,73 @@ export interface PaymentEvent {
   payload: Record<string, unknown>;
 }
 
+const EXCHANGE = 'payments.events';
+
 /**
- * Publicador de eventos vía webhooks HTTP.
+ * Publicador de eventos vía RabbitMQ (CloudAMQP), siguiendo la "Guía Base:
+ * Integración de Microservicios con RabbitMQ" acordada entre G5/G6/G9/G10.
  *
- * Reemplaza la integración anterior con RabbitMQ: el servicio ahora depende
- * únicamente de Supabase (Postgres) + HTTP estándar, sin brokers adicionales
- * que levantar en producción.
+ * - Protocolo: AMQP vía `amqplib`.
+ * - Exchange: `payments.events`, tipo `topic`, durable.
+ * - Routing keys: payment.pending | payment.approved | payment.rejected.
+ * - Serialización: JSON.stringify(...) → Buffer.from(...), como pide la guía.
+ * - Persistencia: mensajes marcados `persistent: true` para sobrevivir a un
+ *   reinicio del broker mientras no hayan sido consumidos.
  *
- * Cada grupo consumidor (5, 9, 10) expone su propio endpoint HTTP y se
- * "suscribe" agregando su URL a la variable de entorno correspondiente a la
- * routing key que le interesa. Varias URLs por evento van separadas por coma.
+ * Cada grupo consumidor (5, 9, 10) declara su propia cola y la bindea al
+ * exchange con las routing keys que le interesan — no necesitamos conocer
+ * sus URLs ni configurarlas acá (a diferencia del esquema anterior de
+ * webhooks HTTP punto a punto).
  *
- * Config (.env):
- *   WEBHOOK_URLS_PAYMENT_PENDING="https://grupo9.example.com/webhooks/payments"
- *   WEBHOOK_URLS_PAYMENT_APPROVED="https://grupo5.example.com/hook,https://grupo10.example.com/hook"
- *   WEBHOOK_URLS_PAYMENT_REJECTED="https://grupo9.example.com/hook,https://grupo10.example.com/hook"
- *
- * Cada suscriptor recibe un POST con el mismo body que antes viajaba como
- * mensaje de RabbitMQ (PaymentEvent), así que el contrato de datos no cambia
- * para los otros grupos — solo el transporte (HTTP en vez de AMQP).
+ * Resiliencia: si `RABBITMQ_URL` no está configurada o el broker no está
+ * disponible, el servicio sigue funcionando con normalidad (crear/consultar/
+ * confirmar/rechazar pagos vía REST no depende de RabbitMQ) — solo se
+ * pierde la publicación de eventos, que queda logueada como advertencia.
+ * Esto evita que un broker caído tumbe todo el servicio de pagos.
  */
 class EventPublisher {
-  /**
-   * Se mantiene por compatibilidad con el resto del código (app.ts la
-   * invoca al arrancar). Ya no hay conexión persistente que abrir: los
-   * webhooks HTTP se disparan on-demand en publish().
-   */
+  private connection: amqp.ChannelModel | null = null;
+  private channel: amqp.Channel | null = null;
+  private connecting: Promise<void> | null = null;
+
   async connect(): Promise<void> {
-    console.log('[EventPublisher] Listo (modo HTTP webhooks, sin broker externo)');
+    const url = process.env.RABBITMQ_URL;
+
+    if (!url) {
+      console.warn(
+        '[EventPublisher] RABBITMQ_URL no configurada — el servicio arranca igual, ' +
+          'pero no se van a publicar eventos hasta que se configure.'
+      );
+      return;
+    }
+
+    try {
+      this.connection = await amqp.connect(url);
+      this.channel = await this.connection.createChannel();
+      await this.channel.assertExchange(EXCHANGE, 'topic', { durable: true });
+
+      this.connection.on('error', (err) => {
+        console.error('[EventPublisher] Conexión RabbitMQ perdida:', err.message);
+        this.connection = null;
+        this.channel = null;
+      });
+      this.connection.on('close', () => {
+        console.warn('[EventPublisher] Conexión RabbitMQ cerrada.');
+        this.connection = null;
+        this.channel = null;
+      });
+
+      console.log(`[EventPublisher] Conectado a RabbitMQ, exchange "${EXCHANGE}" listo.`);
+    } catch (err) {
+      // No relanzamos: un broker caído no debe impedir que el servicio de
+      // pagos arranque y siga respondiendo por REST.
+      console.error(
+        '[EventPublisher] No se pudo conectar a RabbitMQ, se continúa sin publicar eventos:',
+        (err as Error).message
+      );
+      this.connection = null;
+      this.channel = null;
+    }
   }
 
   async publish(eventName: EventName, data: Record<string, unknown>): Promise<void> {
@@ -47,61 +88,29 @@ class EventPublisher {
       payload: data,
     };
 
-    // Mismo esquema de routing keys que en la versión con RabbitMQ:
-    //   PaymentApproved  → payment.approved  (Grupo 5 pedidos, Grupo 10 reportería)
-    //   PaymentRejected  → payment.rejected  (Grupo 9 notificaciones, Grupo 10)
-    //   PaymentPending   → payment.pending   (Grupo 9 notificaciones)
+    // payment.pending | payment.approved | payment.rejected
     const routingKey = `payment.${eventName.replace('Payment', '').toLowerCase()}`;
-    const envVar = `WEBHOOK_URLS_${routingKey.toUpperCase().replace(/\./g, '_')}`;
-    const urls = (process.env[envVar] || '')
-      .split(',')
-      .map((u) => u.trim())
-      .filter(Boolean);
 
-    if (urls.length === 0) {
-      console.log(
-        `[EventPublisher] ${eventName} (${event.eventId}) → sin suscriptores configurados en ${envVar}`
+    if (!this.channel) {
+      console.warn(
+        `[EventPublisher] ${eventName} (${event.eventId}) → no publicado, sin canal activo a RabbitMQ.`
       );
       return;
     }
 
-    // Fan-out best-effort: un consumidor caído no debe afectar a los demás
-    // ni bloquear la respuesta HTTP al cliente original (eventual consistency,
-    // igual que antes con el exchange topic de RabbitMQ).
-    const results = await Promise.allSettled(urls.map((url) => this.deliver(url, event)));
-
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') {
-        console.log(`[EventPublisher] ${eventName} (${event.eventId}) → OK ${urls[i]}`);
-      } else {
-        console.error(`[EventPublisher] ${eventName} (${event.eventId}) → FALLÓ ${urls[i]}:`, r.reason);
-      }
-    });
-  }
-
-  /** POST con timeout y 1 reintento; no lanza hasta agotar los intentos. */
-  private async deliver(url: string, event: PaymentEvent, attempt = 1): Promise<void> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event),
-        signal: controller.signal,
-      });
+      const buffer = Buffer.from(JSON.stringify(event));
+      const ok = this.channel.publish(EXCHANGE, routingKey, buffer, { persistent: true });
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+      if (ok) {
+        console.log(`[EventPublisher] ${eventName} (${event.eventId}) → publicado en "${routingKey}"`);
+      } else {
+        // Buffer interno del canal lleno (backpressure); no es un error fatal,
+        // pero lo dejamos visible para monitoreo.
+        console.warn(`[EventPublisher] ${eventName} (${event.eventId}) → backpressure en "${routingKey}"`);
       }
     } catch (err) {
-      if (attempt < 2) {
-        return this.deliver(url, event, attempt + 1);
-      }
-      throw err;
-    } finally {
-      clearTimeout(timeout);
+      console.error(`[EventPublisher] ${eventName} (${event.eventId}) → error al publicar:`, err);
     }
   }
 }
