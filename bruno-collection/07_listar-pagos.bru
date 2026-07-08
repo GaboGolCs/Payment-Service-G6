@@ -5,9 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}
+  url: {{baseUrl}}?status=PENDING
   body: none
   auth: none
+}
+
+params:query {
+  status: PENDING
 }
 
 tests {

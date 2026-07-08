@@ -112,6 +112,19 @@ export const mercadoPagoService = {
       .update(manifest)
       .digest('hex');
 
+    // TEMPORAL: debug para diagnosticar mismatch de firma. Quitar después.
+    console.log('[DEBUG signature] manifest:', JSON.stringify(manifest));
+    console.log('[DEBUG signature] secretLength:', env.MP_WEBHOOK_SECRET.length);
+    console.log('[DEBUG signature] computedHash:', computedHash);
+    console.log('[DEBUG signature] receivedHash:', receivedHash);
+    console.log('[DEBUG signature] rawXSignature:', params.xSignature);
+    console.log('[DEBUG signature] xRequestId:', params.xRequestId);
+
+    if (computedHash.length !== receivedHash.length) {
+      console.log('[DEBUG signature] LENGTH MISMATCH');
+      return false;
+    }
+
     return crypto.timingSafeEqual(Buffer.from(computedHash), Buffer.from(receivedHash));
   },
 };

@@ -5,13 +5,13 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/{{paymentId}}/confirm
+  url: {{baseUrl}}/6d7ad4a8-6e36-4f64-a0de-f69929acc77d/confirm
   body: none
   auth: none
 }
 
 headers {
-  Idempotency-Key: confirm-{{runId}}
+  Idempotency-Key: confirm-test-001
 }
 
 tests {
