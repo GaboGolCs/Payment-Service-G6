@@ -26,7 +26,6 @@ export interface CreatePreferenceParams {
 export interface CreatePreferenceResult {
   preferenceId: string;
   initPoint: string;
-  sandboxInitPoint?: string;
 }
 
 export const mercadoPagoService = {
@@ -66,11 +65,7 @@ export const mercadoPagoService = {
       throw new Error('Mercado Pago no devolvió preferenceId/init_point');
     }
 
-    return {
-      preferenceId: response.id,
-      initPoint: response.init_point,
-      sandboxInitPoint: response.sandbox_init_point,
-    };
+    return { preferenceId: response.id, initPoint: response.init_point };
   },
 
   /**
@@ -111,26 +106,37 @@ export const mercadoPagoService = {
     const receivedHash = parts['v1'];
     if (!ts || !receivedHash) return false;
 
-    const manifest = `id:${params.dataId};request-id:${params.xRequestId || ''};ts:${ts};`;
+    // Importante: si x-request-id no viene (común en notificaciones reales
+    // de pago, a diferencia del botón "Simular" del panel de MP), el
+    // segmento "request-id:" NO debe incluirse en el manifest. Incluirlo
+    // vacío (`request-id:;`) genera un hash distinto al que MP calculó,
+    // y la firma nunca coincide.
+    let manifest = `id:${params.dataId};`;
+    if (params.xRequestId) {
+      manifest += `request-id:${params.xRequestId};`;
+    }
+    manifest += `ts:${ts};`;
+
     const computedHash = crypto
       .createHmac('sha256', env.MP_WEBHOOK_SECRET)
       .update(manifest)
       .digest('hex');
 
-    // TEMPORAL: debug para diagnosticar mismatch de firma. Quitar después.
-    console.log('[DEBUG signature] manifest:', JSON.stringify(manifest));
-    console.log('[DEBUG signature] secretLength:', env.MP_WEBHOOK_SECRET.length);
-    console.log('[DEBUG signature] computedHash:', computedHash);
-    console.log('[DEBUG signature] receivedHash:', receivedHash);
-    console.log('[DEBUG signature] rawXSignature:', params.xSignature);
-    console.log('[DEBUG signature] xRequestId:', params.xRequestId);
+    const isValid = crypto.timingSafeEqual(Buffer.from(computedHash), Buffer.from(receivedHash));
 
-    if (computedHash.length !== receivedHash.length) {
-      console.log('[DEBUG signature] LENGTH MISMATCH');
-      return false;
+    // TODO: quitar este log una vez confirmado que la firma valida correctamente
+    // en producción. No expone el secret, solo el manifest y los hashes (que son
+    // salida pública de HMAC, no la clave).
+    if (!isValid) {
+      console.warn('[MercadoPago][debug] Firma inválida — diagnóstico:', {
+        manifest,
+        xRequestIdPresente: Boolean(params.xRequestId),
+        computedHash,
+        receivedHash,
+      });
     }
 
-    return crypto.timingSafeEqual(Buffer.from(computedHash), Buffer.from(receivedHash));
+    return isValid;
   },
 };
 
