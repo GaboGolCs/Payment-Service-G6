@@ -26,6 +26,7 @@ export interface CreatePreferenceParams {
 export interface CreatePreferenceResult {
   preferenceId: string;
   initPoint: string;
+  sandboxInitPoint?: string;
 }
 
 export const mercadoPagoService = {
@@ -65,7 +66,14 @@ export const mercadoPagoService = {
       throw new Error('Mercado Pago no devolvió preferenceId/init_point');
     }
 
-    return { preferenceId: response.id, initPoint: response.init_point };
+    return {
+      preferenceId: response.id,
+      initPoint: response.init_point,
+      // Con credenciales TEST, este es el link que hay que usar para probar
+      // el checkout — init_point puede no redirigir correctamente en modo
+      // sandbox. El SDK lo expone como sandbox_init_point.
+      sandboxInitPoint: response.sandbox_init_point ?? undefined,
+    };
   },
 
   /**
