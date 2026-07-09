@@ -141,6 +141,11 @@ export const mercadoPagoService = {
         xRequestIdPresente: Boolean(params.xRequestId),
         computedHash,
         receivedHash,
+        // No expone el secret, solo su longitud — útil para detectar
+        // espacios/comillas/saltos de línea de más al copiarlo a Render.
+        secretLength: env.MP_WEBHOOK_SECRET.length,
+        secretPrimerCaracter: env.MP_WEBHOOK_SECRET[0],
+        secretUltimoCaracter: env.MP_WEBHOOK_SECRET[env.MP_WEBHOOK_SECRET.length - 1],
       });
     }
 
