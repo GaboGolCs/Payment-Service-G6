@@ -141,9 +141,18 @@ export const getPaymentStats = async (_req: Request, res: Response) => {
  * Consumido asíncronamente por Mercado Pago.
  */
 export const mercadoPagoWebhook = async (req: Request, res: Response) => {
+  // TEMPORAL: debug crudo del request entrante — quitar después
+  console.log('[DEBUG webhook] query:', JSON.stringify(req.query));
+  console.log('[DEBUG webhook] headers[x-signature]:', JSON.stringify(req.headers['x-signature']));
+  console.log('[DEBUG webhook] headers[x-request-id]:', JSON.stringify(req.headers['x-request-id']));
+  console.log('[DEBUG webhook] body:', JSON.stringify(req.body));
+
   try {
     const type = (req.query.type as string) || req.body?.type;
     const dataId = (req.query['data.id'] as string) || req.body?.data?.id;
+
+    console.log('[DEBUG webhook] type resuelto:', type);
+    console.log('[DEBUG webhook] dataId resuelto:', dataId);
 
     if (type !== 'payment' || !dataId) {
       return res.status(200).json({ received: true, ignored: true });
