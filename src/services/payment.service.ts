@@ -27,13 +27,15 @@ export const paymentService = {
 
     if (env.MP_ACCESS_TOKEN) {
       try {
-        const { preferenceId, initPoint } = await mercadoPagoService.createPreference({
+        const { preferenceId, initPoint, sandboxInitPoint } = await mercadoPagoService.createPreference({
           paymentId: payment.id,
           amount: payment.amount,
           currency: payment.currency,
           description: payment.description || undefined,
           payerEmail: payment.payerEmail || undefined,
         });
+        console.log('[DEBUG preference] initPoint (producción, NO usar en pruebas):', initPoint);
+        console.log('[DEBUG preference] sandboxInitPoint (usar este para probar):', sandboxInitPoint);
         payment = await paymentRepository.attachMercadoPagoPreference(payment.id, preferenceId, initPoint);
       } catch (err) {
         // El pago ya quedó registrado (PENDING); Grupo 5 puede reintentar la
