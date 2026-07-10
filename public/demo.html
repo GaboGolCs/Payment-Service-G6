@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Vigía Industrial — Demo de Pago</title>
+<title>FishMarket — Demo de Pago</title>
 <style>
   :root {
     --bg: #0f172a;
@@ -104,14 +104,14 @@
 <body>
 
   <div class="card" id="form-view">
-    <h1>Vigía Industrial</h1>
+    <h1>FishMarket</h1>
     <p class="subtitle">Demo — Pago del servicio (Grupo 6)</p>
 
     <label for="amount">Monto (CLP)</label>
     <input id="amount" type="number" value="5000" min="1" />
 
     <label for="description">Descripción</label>
-    <input id="description" type="text" value="Demo de pago — Vigía Industrial" />
+    <input id="description" type="text" value="Demo de pago — FishMarket" />
 
     <label for="email">Email del pagador</label>
     <input id="email" type="email" value="alumno@universidad.cl" />
@@ -221,14 +221,29 @@
     document.getElementById('loading-view').style.display = 'none';
   }
 
+  async function confirmPaymentManually(paymentId) {
+    try {
+      const res = await fetch(API_BASE + '/' + paymentId + '/confirm', { method: 'POST' });
+      const payment = await res.json();
+      if (!res.ok) {
+        showError(payment.error || 'No se pudo confirmar el pago.');
+        return;
+      }
+      renderResult(payment);
+    } catch (err) {
+      showError('Error de red al confirmar el pago.');
+    }
+  }
+
   function renderPollingTimeout(paymentId) {
     const view = document.getElementById('result-view');
     view.className = 'card status-pending';
     view.innerHTML = `
       <div class="status-icon">⏳</div>
       <h2 class="result-title">Aún procesando</h2>
-      <p class="result-sub">Mercado Pago todavía no confirma el estado final. Puedes reintentar la consulta.</p>
+      <p class="result-sub">Mercado Pago todavía no confirma el estado final. Puedes reintentar la consulta, o simular la confirmación manualmente (backoffice).</p>
       <button onclick="pollPaymentStatus('${paymentId}')">Reintentar consulta</button>
+      <button onclick="confirmPaymentManually('${paymentId}')" style="background:var(--pending); margin-top:10px;">Simular confirmación (backoffice)</button>
       <button onclick="resetDemo()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:var(--text); margin-top:10px;">Volver al inicio</button>
     `;
     view.style.display = 'block';
