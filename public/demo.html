@@ -107,6 +107,9 @@
     <h1>FishMarket</h1>
     <p class="subtitle">Demo — Pago del servicio (Grupo 6)</p>
 
+    <label for="token">Token JWT (Auth Grupo 2)</label>
+    <input id="token" type="text" placeholder="Pega aquí el JWT (Bearer token)" />
+
     <label for="amount">Monto (CLP)</label>
     <input id="amount" type="number" value="5000" min="1" />
 
@@ -142,13 +145,19 @@
     const amount = Number(document.getElementById('amount').value);
     const description = document.getElementById('description').value;
     const payerEmail = document.getElementById('email').value;
+    const token = document.getElementById('token').value.trim();
     const btn = document.getElementById('pay-btn');
 
+    if (!token) {
+      showError('Falta el token JWT (pídelo a Grupo 2 / haz login primero).');
+      return;
+    }
     if (!amount || amount <= 0) {
       showError('El monto debe ser mayor a 0.');
       return;
     }
 
+    sessionStorage.setItem('demoToken', token);
     btn.disabled = true;
     btn.textContent = 'Generando pago…';
 
@@ -160,6 +169,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
           'Idempotency-Key': 'demo-' + Date.now(),
         },
         body: JSON.stringify({ amount, currency: 'CLP', description, payerEmail, orderId: demoOrderId }),
@@ -222,8 +232,12 @@
   }
 
   async function confirmPaymentManually(paymentId) {
+    const token = sessionStorage.getItem('demoToken') || document.getElementById('token')?.value?.trim();
     try {
-      const res = await fetch(API_BASE + '/' + paymentId + '/confirm', { method: 'POST' });
+      const res = await fetch(API_BASE + '/' + paymentId + '/confirm', {
+        method: 'POST',
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+      });
       const payment = await res.json();
       if (!res.ok) {
         showError(payment.error || 'No se pudo confirmar el pago.');
@@ -289,6 +303,12 @@
 
   // Al cargar: si venimos de vuelta de Mercado Pago (o tenemos un pago guardado), consultamos su estado
   (function init() {
+    const savedToken = sessionStorage.getItem('demoToken');
+    if (savedToken) {
+      const tokenInput = document.getElementById('token');
+      if (tokenInput) tokenInput.value = savedToken;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const externalRef = params.get('external_reference');
     const savedId = sessionStorage.getItem('demoPaymentId');
