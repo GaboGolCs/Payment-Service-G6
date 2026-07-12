@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FishMarket — Pagar</title>
+<link rel="stylesheet" href="/payment-common.css" />
+</head>
+<body>
+
+  <div class="card" id="form-view">
+    <h1>FishMarket</h1>
+    <p class="subtitle">Pago del pedido — Grupo 6 (Pagos)</p>
+
+    <label for="token">Token JWT (Auth Grupo 2)</label>
+    <input id="token" type="text" placeholder="Pega aquí el JWT (Bearer token)" />
+
+    <label for="amount">Monto (CLP)</label>
+    <input id="amount" type="number" value="5000" min="1" />
+
+    <label for="description">Descripción</label>
+    <input id="description" type="text" value="Pedido FishMarket" />
+
+    <label for="email">Email del pagador</label>
+    <input id="email" type="email" value="alumno@universidad.cl" />
+
+    <button id="pay-btn" onclick="startPayment()">Pagar con Mercado Pago</button>
+    <p class="error" id="error-msg"></p>
+
+    <p class="footer-note">Checkout Pro — Mercado Pago</p>
+  </div>
+
+<script>
+  const API_BASE = window.location.origin + '/api/payments';
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  // Recupera el token guardado de una sesión anterior en este mismo navegador
+  (function restoreToken() {
+    const saved = sessionStorage.getItem('demoToken');
+    if (saved) document.getElementById('token').value = saved;
+  })();
+
+  async function startPayment() {
+    const amount = Number(document.getElementById('amount').value);
+    const description = document.getElementById('description').value;
+    const payerEmail = document.getElementById('email').value;
+    const token = document.getElementById('token').value.trim();
+    const btn = document.getElementById('pay-btn');
+
+    if (!token) {
+      showError('Falta el token JWT (pídelo a Grupo 2 / haz login primero).');
+      return;
+    }
+    if (!amount || amount <= 0) {
+      showError('El monto debe ser mayor a 0.');
+      return;
+    }
+
+    sessionStorage.setItem('demoToken', token);
+    btn.disabled = true;
+    btn.textContent = 'Generando pago…';
+
+    // orderId de prueba con formato UUID válido, para no romper el consumer de Grupo 5
+    const demoOrderId = 'demo-' + crypto.randomUUID();
+
+    try {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'Idempotency-Key': 'demo-' + Date.now(),
+        },
+        body: JSON.stringify({ amount, currency: 'CLP', description, payerEmail, orderId: demoOrderId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError(data.error || 'No se pudo crear el pago.');
+        btn.disabled = false;
+        btn.textContent = 'Pagar con Mercado Pago';
+        return;
+      }
+
+      if (!data.initPoint) {
+        showError('El pago se creó, pero Mercado Pago no devolvió un link de pago (revisa MP_ACCESS_TOKEN).');
+        btn.disabled = false;
+        btn.textContent = 'Pagar con Mercado Pago';
+        return;
+      }
+
+      // Guardamos el id del pago por si el redirect de MP no trae external_reference
+      sessionStorage.setItem('demoPaymentId', data.id);
+      window.location.href = data.initPoint;
+    } catch (err) {
+      showError('Error de red al contactar el servicio de pagos.');
+      btn.disabled = false;
+      btn.textContent = 'Pagar con Mercado Pago';
+    }
+  }
+</script>
+</body>
+</html>

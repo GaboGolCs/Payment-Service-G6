@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FishMarket — Pago rechazado</title>
+<link rel="stylesheet" href="/payment-common.css" />
+</head>
+<body>
+
+  <div class="card" id="loading-view" style="text-align:center;">
+    <div class="spinner"></div>
+    <p class="subtitle" style="margin:0;">Verificando el resultado del pago…</p>
+  </div>
+
+  <div class="card" id="result-view" style="display:none;"></div>
+  <div class="card status-rejected" id="error-view" style="display:none;"></div>
+
+<script src="/payment-common.js"></script>
+<script>initResultPage();</script>
+</body>
+</html>
