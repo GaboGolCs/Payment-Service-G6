@@ -14,6 +14,16 @@
 
     <label for="token">Token JWT (Auth Grupo 2)</label>
     <input id="token" type="text" placeholder="Pega aquí el JWT (Bearer token)" />
+    <div style="display:flex; gap:8px; margin-top:6px;">
+      <input id="login-email" type="email" placeholder="Email de prueba" style="flex:1;" />
+      <input id="login-password" type="password" placeholder="Contraseña" style="flex:1;" />
+    </div>
+    <button type="button" onclick="doLogin()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:var(--text); margin-top:8px;">
+      Obtener token (login Grupo 2)
+    </button>
+
+    <label for="orderId">Order ID (UUID real de Grupo 5)</label>
+    <input id="orderId" type="text" placeholder="ej: f38b9fa7-9f4b-45e0-a1f2-2ff470d53b58" />
 
     <label for="amount">Monto (CLP)</label>
     <input id="amount" type="number" value="5000" min="1" />
@@ -33,6 +43,42 @@
 <script>
   const API_BASE = window.location.origin + '/api/payments';
 
+  // ⚠️ AJUSTA ESTO con Grupo 2: URL exacta, nombres de campos del body,
+  // y el nombre del campo del token en la respuesta (token / access_token / jwt / data.token).
+  const AUTH_LOGIN_URL = 'https://auth-minimarket-cloud.onrender.com/auth/login';
+
+  async function doLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!email || !password) {
+      showError('Ingresa email y contraseña de prueba para hacer login.');
+      return;
+    }
+    try {
+      const res = await fetch(AUTH_LOGIN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showError(data.error || 'No se pudo iniciar sesión en Auth (Grupo 2).');
+        return;
+      }
+      // Intenta varios nombres de campo comunes — ajusta según lo que Grupo 2 confirme.
+      const token = data.token || data.access_token || data.jwt || data?.data?.token;
+      if (!token) {
+        showError('Login OK pero no encontré el campo del token en la respuesta. Revisa la consola (F12).');
+        console.log('[Auth login] respuesta completa:', data);
+        return;
+      }
+      document.getElementById('token').value = token;
+      sessionStorage.setItem('demoToken', token);
+    } catch (err) {
+      showError('Error de red al hacer login contra Auth (Grupo 2).');
+    }
+  }
+
   function showError(msg) {
     const el = document.getElementById('error-msg');
     el.textContent = msg;
@@ -50,6 +96,7 @@
     const description = document.getElementById('description').value;
     const payerEmail = document.getElementById('email').value;
     const token = document.getElementById('token').value.trim();
+    const orderIdInput = document.getElementById('orderId').value.trim();
     const btn = document.getElementById('pay-btn');
 
     if (!token) {
@@ -60,13 +107,19 @@
       showError('El monto debe ser mayor a 0.');
       return;
     }
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (orderIdInput && !uuidPattern.test(orderIdInput)) {
+      showError('El Order ID no tiene formato UUID válido. Pídele el id correcto a Grupo 5.');
+      return;
+    }
 
     sessionStorage.setItem('demoToken', token);
     btn.disabled = true;
     btn.textContent = 'Generando pago…';
 
-    // orderId de prueba con formato UUID válido, para no romper el consumer de Grupo 5
-    const demoOrderId = 'demo-' + crypto.randomUUID();
+    // Usa el orderId real de Grupo 5 si lo escribiste; si lo dejas vacío,
+    // genera uno de prueba (para no depender de Grupo 5 mientras debuggeas).
+    const orderId = orderIdInput || ('demo-' + crypto.randomUUID());
 
     try {
       const res = await fetch(API_BASE, {
@@ -76,7 +129,7 @@
           'Authorization': 'Bearer ' + token,
           'Idempotency-Key': 'demo-' + Date.now(),
         },
-        body: JSON.stringify({ amount, currency: 'CLP', description, payerEmail, orderId: demoOrderId }),
+        body: JSON.stringify({ amount, currency: 'CLP', description, payerEmail, orderId }),
       });
 
       const data = await res.json();
