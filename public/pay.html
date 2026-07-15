@@ -28,6 +28,7 @@
       <option value="__manual__">Escribir manualmente</option>
     </select>
     <input id="orderId" type="text" placeholder="ej: f38b9fa7-9f4b-45e0-a1f2-2ff470d53b58" style="display:none; margin-top:8px;" />
+    <input id="userId" type="hidden" />
 
     <label for="amount">Monto (CLP)</label>
     <input id="amount" type="number" value="5000" min="1" />
@@ -89,6 +90,8 @@
     el.style.display = 'block';
   }
 
+  let ordersById = {};
+
   function onOrderSelect() {
     const select = document.getElementById('orderId-select');
     const manualInput = document.getElementById('orderId');
@@ -96,9 +99,18 @@
       manualInput.style.display = 'block';
       manualInput.value = '';
       manualInput.focus();
-    } else {
-      manualInput.style.display = 'none';
-      manualInput.value = select.value;
+      document.getElementById('userId').value = '';
+      return;
+    }
+    manualInput.style.display = 'none';
+    manualInput.value = select.value;
+
+    // Autocompleta monto/descripción con lo que vino en el evento de Grupo 5
+    const order = ordersById[select.value];
+    if (order) {
+      if (order.amount) document.getElementById('amount').value = order.amount;
+      if (order.description) document.getElementById('description').value = order.description;
+      document.getElementById('userId').value = order.userId || '';
     }
   }
 
@@ -113,6 +125,9 @@
         select.innerHTML = '<option value="">— Sin órdenes recibidas aún —</option><option value="__manual__">Escribir manualmente</option>';
         return;
       }
+
+      ordersById = {};
+      orders.forEach((o) => { ordersById[o.orderId] = o; });
 
       const emptyOpt = document.createElement('option');
       emptyOpt.value = '';
@@ -188,7 +203,7 @@
           'Authorization': 'Bearer ' + token,
           'Idempotency-Key': 'demo-' + Date.now(),
         },
-        body: JSON.stringify({ amount, currency: 'CLP', description, payerEmail, orderId }),
+        body: JSON.stringify({ amount, currency: 'CLP', description, payerEmail, orderId, userId: document.getElementById('userId').value || undefined }),
       });
 
       const data = await res.json();

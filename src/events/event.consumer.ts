@@ -5,6 +5,7 @@ export interface KnownOrder {
   orderNumber?: string;
   amount?: number;
   description?: string;
+  userId?: string;
   receivedAt: string;
 }
 
@@ -85,7 +86,8 @@ class EventConsumer {
       orderId,
       orderNumber: payload.orderNumber || payload.order_number,
       amount: payload.amount ?? payload.totalAmount ?? payload.total_amount,
-      description: payload.description || payload.orderNumber || undefined,
+      description: payload.description || payload.orderNumber || payload.order_number || undefined,
+      userId: payload.userId || payload.user_id || undefined,
       receivedAt: new Date().toISOString(),
     };
 
