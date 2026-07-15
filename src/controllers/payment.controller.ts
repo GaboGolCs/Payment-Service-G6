@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { paymentService } from '../services/payment.service';
 import { PaymentStateError, ConflictError } from '../models/payment.model';
 import { mercadoPagoService } from '../services/mercadopago.service';
+import { eventConsumer } from '../events/event.consumer';
 
 const CreatePaymentSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
@@ -100,6 +101,15 @@ export const rejectPayment = async (req: Request, res: Response) => {
       return res.status(409).json({ error: err.message, code: 'RACE_CONDITION' });
     }
     console.error('[rejectPayment]', err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+};
+
+export const getPendingOrders = async (_req: Request, res: Response) => {
+  try {
+    const orders = eventConsumer.getKnownOrders();
+    return res.json(orders);
+  } catch (err) {
     return res.status(500).json({ error: 'Internal error' });
   }
 };

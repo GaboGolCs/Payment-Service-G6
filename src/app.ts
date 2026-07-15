@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import paymentRoutes from './routes/payment.routes';
 import { eventPublisher } from './events/event.publisher';
+import { eventConsumer } from './events/event.consumer';
 import { env, assertRequiredEnv } from './config/env';
 
 const app = express();
@@ -32,6 +33,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   try {
     assertRequiredEnv();
     await eventPublisher.connect();
+    eventConsumer.start(); // no bloqueante: reintenta solo si falla
     app.listen(env.PORT, () => {
       console.log(`[Payment Service] Running on http://localhost:${env.PORT}`);
       console.log(`[Payment Service] Health: http://localhost:${env.PORT}/health`);

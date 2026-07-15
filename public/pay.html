@@ -22,8 +22,12 @@
       Obtener token (login Grupo 2)
     </button>
 
-    <label for="orderId">Order ID (UUID real de Grupo 5)</label>
-    <input id="orderId" type="text" placeholder="ej: f38b9fa7-9f4b-45e0-a1f2-2ff470d53b58" />
+    <label for="orderId">Order ID (órdenes de Grupo 5 vía RabbitMQ)</label>
+    <select id="orderId-select" onchange="onOrderSelect()">
+      <option value="">— Cargando órdenes… —</option>
+      <option value="__manual__">Escribir manualmente</option>
+    </select>
+    <input id="orderId" type="text" placeholder="ej: f38b9fa7-9f4b-45e0-a1f2-2ff470d53b58" style="display:none; margin-top:8px;" />
 
     <label for="amount">Monto (CLP)</label>
     <input id="amount" type="number" value="5000" min="1" />
@@ -85,6 +89,58 @@
     el.style.display = 'block';
   }
 
+  function onOrderSelect() {
+    const select = document.getElementById('orderId-select');
+    const manualInput = document.getElementById('orderId');
+    if (select.value === '__manual__') {
+      manualInput.style.display = 'block';
+      manualInput.value = '';
+      manualInput.focus();
+    } else {
+      manualInput.style.display = 'none';
+      manualInput.value = select.value;
+    }
+  }
+
+  async function loadPendingOrders() {
+    const select = document.getElementById('orderId-select');
+    try {
+      const res = await fetch(API_BASE + '/pending-orders');
+      const orders = await res.json();
+      select.innerHTML = '';
+
+      if (!res.ok || !Array.isArray(orders) || orders.length === 0) {
+        select.innerHTML = '<option value="">— Sin órdenes recibidas aún —</option><option value="__manual__">Escribir manualmente</option>';
+        return;
+      }
+
+      const emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = `— Selecciona una orden (${orders.length}) —`;
+      select.appendChild(emptyOpt);
+
+      orders.forEach((o) => {
+        const opt = document.createElement('option');
+        opt.value = o.orderId;
+        const label = o.orderNumber ? `${o.orderNumber} — ` : '';
+        const amount = o.amount ? ` — $${Number(o.amount).toLocaleString('es-CL')}` : '';
+        opt.textContent = `${label}${o.orderId.slice(0, 8)}…${amount}`;
+        select.appendChild(opt);
+      });
+
+      const manualOpt = document.createElement('option');
+      manualOpt.value = '__manual__';
+      manualOpt.textContent = 'Escribir manualmente';
+      select.appendChild(manualOpt);
+    } catch (err) {
+      select.innerHTML = '<option value="">— Error al cargar órdenes —</option><option value="__manual__">Escribir manualmente</option>';
+    }
+  }
+
+  // Carga las órdenes al abrir la página, y refresca cada 10s por si llega una nueva
+  loadPendingOrders();
+  setInterval(loadPendingOrders, 10000);
+
   // Recupera el token guardado de una sesión anterior en este mismo navegador
   (function restoreToken() {
     const saved = sessionStorage.getItem('demoToken');
@@ -96,7 +152,10 @@
     const description = document.getElementById('description').value;
     const payerEmail = document.getElementById('email').value;
     const token = document.getElementById('token').value.trim();
-    const orderIdInput = document.getElementById('orderId').value.trim();
+    const orderSelect = document.getElementById('orderId-select');
+    const orderIdInput = orderSelect.value === '__manual__'
+      ? document.getElementById('orderId').value.trim()
+      : orderSelect.value.trim();
     const btn = document.getElementById('pay-btn');
 
     if (!token) {

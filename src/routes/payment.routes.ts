@@ -14,6 +14,10 @@ router.get('/', ctrl.getPayments);
 // GET /payments/stats — estadísticas para Grupo 10 reportería
 router.get('/stats', ctrl.getPaymentStats);
 
+// GET /payments/pending-orders — órdenes conocidas vía RabbitMQ (OrderCreated de Grupo 5),
+// usado por pay.html para poblar el dropdown sin pedir el UUID a mano.
+router.get('/pending-orders', ctrl.getPendingOrders);
+
 // POST /payments/webhook — notificaciones de Mercado Pago (público, sin JWT:
 // Mercado Pago no tiene ni puede tener un token de nuestro sistema de auth;
 // se verifica con la firma propia de MP en el controller)
