@@ -27,8 +27,8 @@ export class EventPublisher {
       this.channel = await this.connection.createChannel();
       
       if (this.channel) {
-        await this.channel.assertExchange('payments.events', 'topic', { durable: true });
-        console.log('[EventPublisher] Conectado a RabbitMQ, exchange "payments.events" listo.');
+        await this.channel.assertExchange('fishmarket', 'topic', { durable: true });
+        console.log('[EventPublisher] Conectado a RabbitMQ, exchange "fishmarket" listo.');
       }
     } catch (error) {
       console.error('[EventPublisher] Error conectando a RabbitMQ:', error);
@@ -51,7 +51,7 @@ export class EventPublisher {
         throw new Error('[EventPublisher] No se pudo obtener un canal activo de RabbitMQ.');
       }
 
-      const exchange = 'payments.events';
+      const exchange = 'fishmarket';
       const routingKey = eventName.replace(/([a-z0-9])([A-Z])/g, '$1.$2').toLowerCase();
       
       const messageBuffer = Buffer.from(JSON.stringify({
