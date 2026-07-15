@@ -11,10 +11,11 @@ export interface KnownOrder {
 const MAX_KNOWN_ORDERS = 100;
 const QUEUE_NAME = 'g6-payment-service';
 const EXCHANGE_NAME = 'fishmarket';
-// Escuchamos cualquier evento que empiece con "order." (order.created,
-// order.updated, etc.) para no perder mensajes si Grupo 5 cambia el nombre
-// exacto del evento más adelante.
-const ROUTING_PATTERN = 'order.*';
+// Grupo 5 publica con el nombre crudo del evento (ej. "OrderCreated"),
+// no con la convención "topic" en minúsculas con puntos que usa nuestro
+// propio publisher. Enlazamos ambos patrones para no depender de que
+// mantengan una convención específica.
+const ROUTING_PATTERNS = ['OrderCreated', 'order.*', 'order.created'];
 
 class EventConsumer {
   private connection: any = null;
@@ -33,9 +34,11 @@ class EventConsumer {
 
       await this.channel.assertExchange(EXCHANGE_NAME, 'topic', { durable: true });
       const q = await this.channel.assertQueue(QUEUE_NAME, { durable: true });
-      await this.channel.bindQueue(q.queue, EXCHANGE_NAME, ROUTING_PATTERN);
+      for (const pattern of ROUTING_PATTERNS) {
+        await this.channel.bindQueue(q.queue, EXCHANGE_NAME, pattern);
+      }
 
-      console.log(`[EventConsumer] Escuchando "${ROUTING_PATTERN}" en cola "${QUEUE_NAME}" (exchange "${EXCHANGE_NAME}").`);
+      console.log(`[EventConsumer] Escuchando [${ROUTING_PATTERNS.join(', ')}] en cola "${QUEUE_NAME}" (exchange "${EXCHANGE_NAME}").`);
 
       this.channel.consume(q.queue, (msg: any) => {
         if (!msg) return;
