@@ -8,7 +8,7 @@ import { eventConsumer } from '../events/event.consumer';
 const CreatePaymentSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().length(3).optional(),
-  orderId: z.string().optional(),
+  orderId: z.string().uuid('orderId debe ser un UUID válido (el id interno del pedido, no el order_number)').optional(),
   description: z.string().optional(),
   payerEmail: z.string().email().optional(),
 });
